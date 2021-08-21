@@ -1,4 +1,4 @@
-function [x,n_iters,objs,errs,runtimes] = PSR(A,AH,y,sigma,varargin)
+function [x,n_iters,objs,errs,runtimes] = WirtingerPSR(A,AH,y,sigma,varargin)
 % *************************************************************************
 % * This function applies the Wirtinger gradient descent algorithm to solve
 %   pixel-super-resolved phase retrieval problems of the form
