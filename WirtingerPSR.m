@@ -11,12 +11,10 @@ function [x,n_iters,objs,errs,runtimes] = WirtingerPSR(A,AH,y,sigma,varargin)
 %
 %   See the following paper for details.
 %
-%   [1] XXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+%   [1] Yunhui Gao and Liangcai Cao, "Generalized optimization framework 
+%       for pixel super-resolution imaging in digital holography," 
+%       Opt. Express 29, 28805-28823 (2021)
 %
-%   For implementation details, see the README.md file.
-%
-% *************************************************************************
-% * Copyright 
 % *************************************************************************
 %
 %   ===== Required inputs =================================================
