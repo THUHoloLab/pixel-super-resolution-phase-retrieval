@@ -55,10 +55,10 @@ A = @(x,k) propagate(x.*mask(:,:,k), d, pxsize, wavlen, method);
 AH = @(x,k) propagate(x, -d, pxsize, wavlen, method).*conj(mask(:,:,k));
 
 %% reconstruction
-n_iters = 50;
-step = 2;%0.07;
+n_iters = 200;
+step = 2;
 unwrapper = @(x) puma_ho(x,1);
-[x_r,n_iters,objs,errs,~] = PSR(A,AH,y,sigma,...
+[x_r,n_iters,objs,errs,~] = WirtingerPSR(A,AH,y,sigma,...
     'initializer',0,...
     'max_iter',n_iters,...
     'min_iter',n_iters,...
@@ -82,5 +82,3 @@ figure,imshow(abs(x_r)-abs(x),[]);colorbar
 colormap jet
 figure,imshow(phase-angle(x)-mean(phase-angle(x)),[]);colorbar
 colormap jet
-%%
-save('../results/05/incremental_050_noise.mat')
