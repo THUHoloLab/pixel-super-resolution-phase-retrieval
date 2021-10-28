@@ -1,5 +1,5 @@
 # WirtingerPSR: Wirtinger gradient descent algorithm for pixel super-resolution phase retrieval
-**Author:** [Yunhui Gao](https://github.com/Yunhui-Gao)
+**Author:** [Yunhui Gao](https://github.com/Yunhui-Gao) (gyh21@mails.tsinghua.edu.cn)
 
 For details, see our paper:
 
