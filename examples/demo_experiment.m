@@ -7,6 +7,10 @@ addpath(genpath('./utils'))
 
 load('../data/experiment/d1_phase_target.mat')
 
+%% 
+% =========================================================================
+%                         Data preprocessing
+% =========================================================================
 %% estimate maximum resolution (optional)
 [m1,m2,~] = size(y);
 L = min(m1,m2)*pxsize;
@@ -35,18 +39,15 @@ end
 y = images_crop;
 phasemasks = phasemasks_crop;
 
-%%
-save('data_cell_v0.mat')
-
-%%
-clear all
-load('data_cell_v0.mat')
-
+%% 
+% =========================================================================
+%                         Algorithm initialization
+% =========================================================================
 addpath(genpath('./utils'))
 addpath(genpath('../src'))
 
 %%
-sigma = 1;      % down-sampling ratio (along each dimension)
+sigma = 1;              % down-sampling ratio (along each dimension)
 n1 = size(ref,1)*sigma;
 n2 = size(ref,2)*sigma;
 phasemasks_rs = zeros(n1,n2,S);
@@ -54,18 +55,20 @@ for i = 1:S
     phasemasks_rs(:,:,i) = imresize(phasemasks(:,:,i),[n1,n2],'bilinear');
 end
 
+% diffraction calculation
 kx = pi/(pxsize/sigma)*(-1:2/n2:1-2/n2);
 ky = pi/(pxsize/sigma)*(-1:2/n1:1-2/n1);
 [KX,KY] = meshgrid(kx,ky);
 KK = KX.^2+KY.^2;
 k = 2*pi/wavlen;
 
+% measurement operator
 A = @(x,j) propagate_gpu(x.*exp(-1i*phasemasks_rs(:,:,j)),dist,KK,k,method);
 AH = @(x,j) propagate_gpu(x,-dist,KK,k,method).*exp(1i*phasemasks_rs(:,:,j));
 
-n_iters = 20;
-x_init = ones(n1,n2);
-step = 2;
+x_init = ones(n1,n2);   % initialization
+n_iters = 20;           % number of iteration
+step = 2;               % step size
 
 S0 = 64;
 
@@ -74,29 +77,11 @@ mydF = @(x) dF(x,y,A,AH,S0,sigma);
 mydFi = @(x,k) dFi(x,y,A,AH,sigma,k);
 
 threshold = -Inf;
-[x_igd,F_igd,~] = GradientDescentIncremental(x_init,myF,mydFi,step,1,S,threshold);
-[x_aggd,F_aggd,~] = GradientDescentGlobal(x_igd,myF,mydF,step,n_iters);
+[x_ggd,F_ggd,~] = GradientDescentGlobal(x_igd,myF,mydF,step,n_iters);
 
-% lambda = 5e-3;
-% n_subiters = 2;
-% mydF2 = @(x) mydF(x)*2;
-% myR = @(x) lambda*normTVa(x);    % isotropic TV norm as the penalty function
-% myproxR = @(x,gamma) proxTVa(x,gamma*lambda,n_subiters);       % proximity operator
-% [x_agpg,F_agpg,runtimes_agpg] = ProximalGradientGlobalNesterov(x_igd,myF,mydF2,myR,myproxR,1,n_iters);
-
-%%
-figure,imshow(abs(flipud(x_aggd)),[])
-%%
-figure,imshow(abs(flipud(x_agpg)),[0,1])
-%%
-x_new = propagate_gpu(x_aggd,0.013,KK,k,method);
-figure,imshow(abs(fliplr(x_new)),[])
-%%
-figure,imshow(angle(x),[-pi+1,pi]);colorbar
-figure,plot(0:10,mean(objs,2))
-figure,plot(0:50,[mean(objs,2);mean(objs2(2:end,:),2)]);
-%%
-save('results/cell_FOV.mat','x_aggd','F_aggd')
+%% display the results
+figure,imshow(abs(x_ggd),[])
+figure,imshow(phase(x_ggd),[])
 
 %%
 function val = F(x,y,A,S,sigma)
