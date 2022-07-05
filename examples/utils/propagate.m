@@ -1,6 +1,19 @@
 function [ wavefront_out ] = propagate( wavefront_in, dist, ...
     px_size, wavelen, method )
 
+% -----------------------------------------------------------------
+% This function numerically simulates the propagation of a complex 
+% wavefront with a certain method.
+% -----------------------------------------------------------------
+%   INPUT   [inputWavefront] original complex wavefront
+%           [dist] propagating distance (mm)
+%           [pxSize] pixel size (mm)
+%           [waveLen] wavelength (mm)
+%           [method] propagation method ('Fresnel' or 'Angular 
+%           Spectrum')
+%   OUTPUT  [outputWavefront] complex wavefront after propagation
+% -----------------------------------------------------------------
+
 [N,M] = size(wavefront_in);    % size of the wavefront
 
 kx = pi/px_size*(-1:2/M:1-2/M);
