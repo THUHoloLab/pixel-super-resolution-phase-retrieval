@@ -62,7 +62,7 @@ for iter = 1:n_iters
     
     % adaptive step size selection
     if (J_vals(iter) - J_vals(iter+1)) / J_vals(iter) < opts.threshold
-        gam = gammma / opts.eta;
+        gam = gam / opts.eta;
     end
     
 end

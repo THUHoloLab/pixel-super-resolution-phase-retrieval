@@ -1,4 +1,4 @@
-function [x,J_vals,E_vals,runtimes] = AWF(x_init,F,dF,R,proxR,gamma,n_iters,opts)
+function [x,J_vals,E_vals,runtimes] = AWF(x_init,F,dF,R,proxR,gam,n_iters,opts)
 % =========================================================================
 % Wirtinger gradient descent algorithm with Nesterov's acceleration.
 % -------------------------------------------------------------------------
@@ -37,7 +37,7 @@ timer = tic;
 for iter = 1:n_iters
 
     % proximal gradient update
-    x_next = proxR(z - gamma*dF(z),gamma);
+    x_next = proxR(z - gam*dF(z),gam);
     J_vals(iter+1) = F(x_next) + R(x_next);
 
     % Nesterov extrapolation
@@ -54,7 +54,7 @@ for iter = 1:n_iters
     % display status
     if opts.verbose
         fprintf('iter: %4d | objective: %10.4e | stepsize: %2.2e | runtime: %5.1f s\n', ...
-                iter, J_vals(iter+1), gamma, runtimes(iter));
+                iter, J_vals(iter+1), gam, runtimes(iter));
     end
 
     x = x_next;
