@@ -49,7 +49,7 @@ params.method = 'Angular Spectrum';     % numerical method
 params.dist   = 5;                      % imaging distance (mm)
 
 % check model correctness
-dist_crit = 2*max([size(x,1),size(x,2)])*params.pxsize^2/max(params.wavlen);
+dist_crit = 2*max([size(x,1),size(x,2)])*params.pxsize^2/params.wavlen;
 if dist_crit < max(params.dist)
     error('Angular spectrum not applicable')
 end
@@ -81,7 +81,7 @@ noisevar = 0.01;    % noise level
 y = NaN(m,m,K);
 for k = 1:K
     u = A(x,k);
-    y(:,:,k) = max(S(abs(u).^2,sig).*(1+noisevar*randn(m,m)),0);    % additive white Gaussian noise
+    y(:,:,k) = max(S(abs(u).^2,sig).*(1+noisevar*randn(m,m)),0);    % Gaussian noise
 end
 
 % display measurement
@@ -123,7 +123,7 @@ myF     = @(x) F(x,y,A,K,sig);                          % fidelity function
 mydF    = @(x) dF(x,y,A,AH,K,sig);                      % gradient of the fidelity function
 mydFk   = @(x,k) dFk(x,y,A,AH,k,sig);                   % gradient of the fidelity function with respect to the k-th measurement
 myR     = @(x) normTV(x,lam);                           % regularization function
-myproxR = @(x,gam) proxTV(x,gam,lam,n_subiters);        % proximal operator for the regularization function
+myproxR = @(x,gamma) proxTV(x,gamma,lam,n_subiters);    % proximal operator for the regularization function
 
 % run the algorithm
 [x_awf,J_awf,E_awf,runtimes_awf] = AWF(x_init,myF,mydF,myR,myproxR,gam,n_iters,opts);     % AWF (accelerated Wirtinger flow)
