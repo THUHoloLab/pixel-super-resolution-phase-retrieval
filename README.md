@@ -15,5 +15,4 @@ For algorithm derivation and implementation details, please refer to our papers:
 - [Yunhui Gao, Feng Yang, and Liangcai Cao, "Pixel Super-Resolution Phase Retrieval for Lensless On-Chip Microscopy via Accelerated Wirtinger Flow," Cells 11, 1999 (2022)](https://doi.org/10.3390/cells11131999).
 
 Contact
-gyh21@mails.tsinghua.edu.cn
-clc@tsinghua.edu.cn
+gyh21@mails.tsinghua.edu.cn; clc@tsinghua.edu.cn
