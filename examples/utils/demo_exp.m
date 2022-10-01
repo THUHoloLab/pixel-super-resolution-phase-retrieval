@@ -18,106 +18,103 @@
 %       Yunhui Gao (gyh21@mails.tsinghua.edu.cn)
 % =========================================================================
 
-%%
-% =========================================================================
-% Data generation
-% =========================================================================
-clear;clc
-close all
+%% load experimental data
+clear;clc;
+close all;
 
 % load functions
 addpath(genpath('./utils'))
 addpath(genpath('../src'))
 
-% set parameters
-sig = 4;    % down-sampling ratio
-m = 256;    % sensor resolution: m x m
-n = m*sig;  % sample resolution: n x n
-K = 8;      % number of diversity measurements
+group_num = 2;      % group number
+load(['../data/experiment/E',num2str(group_num),'.mat'])
 
-% load test images
-img1 = imresize(im2double(imread('../data/simulation/cameraman.bmp')),[n,n]);
-img2 = imresize(im2double(imread('../data/simulation/peppers.bmp')),  [n,n]);
+%% estimate maximum resolution (optional)
+[m1,m2,~] = size(y);
+L = min(m1,m2)*pxsize;
+sig_max = L*pxsize/(sqrt(dist^2+L^2/4)*wavlen);
+disp(['Maximum down-sampling ratio: ',num2str(floor(sig_max)),'x'])
 
-% sample
-x = (0.8*img1+0.2).*exp(1i*pi/2*(img2));
-
-% physical parameters
-params.pxsize = 5e-3;                   % pixel size (mm)
-params.wavlen = 0.5e-3;                 % wavelength (mm)
-params.method = 'Angular Spectrum';     % numerical method
-params.dist   = 5;                      % imaging distance (mm)
-
-% zero-pad the object to avoid convolution artifacts
-kernelsize = params.dist*params.wavlen/params.pxsize/2; % diffraction kernel size
-nullpixels = ceil(kernelsize / params.pxsize);          % number of padding pixels
-x = zeropad(x,nullpixels);                              % zero-padded sample
-
-% generate modulation patterns
-mask = NaN([size(x),K]);
-ptsize = sig*1;     % feature size of the modulation patterns
-for k = 1:K
-    pattern = imresize(rand(size(x)/ptsize),size(x),'bicubic');
-    mask(:,:,k) = exp(1i*pi*pattern);
-end
-
-% forward model
-Q  = @(x,k) propagate(x.*mask(:,:,k), params.dist,params.pxsize,params.wavlen,params.method);
-QH = @(x,k) propagate(x,-params.dist,params.pxsize,params.wavlen,params.method).*conj(mask(:,:,k));
-C  = @(x) imgcrop(x,nullpixels);
-CT = @(x) zeropad(x,nullpixels);
-A  = @(x,k) C(Q(x,k));
-AH = @(x,k) QH(CT(x),k);
-
-% generate data
-rng(0)              % random seed, for reproducibility
-noisevar = 0.01;    % noise level
-y = NaN(m,m,K);
-for k = 1:K
-    u = A(x,k);
-    y(:,:,k) = max(S(abs(u).^2,sig).*(1+noisevar*randn(m,m)),0);    % Gaussian noise
-end
-
-% display measurement
+%% crop image to speed up computation (optioinal)
 figure
-subplot(1,2,1),imshow(angle(x),[]);colorbar;
-title('Phase of the object','interpreter','latex','fontsize',12)
-subplot(1,2,2),imshow(y(:,:,1),[]);colorbar;
-title('Intensity measurement','interpreter','latex','fontsize',12)
-set(gcf,'unit','normalized','position',[0.2,0.3,0.6,0.4])
+[~,rectAoI2] = imcrop(mat2gray(ref));
+rectAoI2 = round(rectAoI2);
+if rem(rectAoI2(3),2) == 0       % to ensure the width and length are even numbers
+    rectAoI2(3) = rectAoI2(3)-1;
+end
+if rem(rectAoI2(4),2) == 0
+    rectAoI2(4) = rectAoI2(4)-1;
+end
+ref = imcrop(ref,rectAoI2);  % crop the zero-padded edges
+
+images_crop = zeros([size(ref),K]);
+phasemasks_crop = zeros([size(ref),K]);
+for k = 1:K
+    disp([num2str(k),'/',num2str(K)]);
+    images_crop(:,:,k) = imcrop(y(:,:,k),rectAoI2);
+    phasemasks_crop(:,:,k) = imcrop(phasemasks(:,:,k),rectAoI2);
+end
+y = images_crop;
+phasemasks = phasemasks_crop;
+
+%%
+save(['cache_E',num2str(group_num),'.mat'])
 
 %%
 % =========================================================================
 % Pixel super-resolution phase retrieval algorithms
 % =========================================================================
 
-% define a rectangular region for computing the errors
-region.x1 = nullpixels+1;
-region.x2 = nullpixels+n;
-region.y1 = nullpixels+1;
-region.y2 = nullpixels+n;
+sig = 1;      % down-sampling ratio (along each dimension)
 
-% algorithm settings
-x_init = zeros(size(x));   % initial guess
-x_init(nullpixels+1:nullpixels+n,nullpixels+1:nullpixels+n) = 1;
+% zero-pad the object to avoid convolution artifacts
+kernelsize = dist*wavlen/(pxsize/sig)/2;    
+nullpixels = ceil(kernelsize / (pxsize/sig));
+n1 = size(ref,1)*sig + 2*nullpixels;
+n2 = size(ref,2)*sig + 2*nullpixels;
 
-lam = 1e-3;             % regularization parameter
-gam = 2;                % step size (see the paper for details)
-n_iters = 50;           % number of iterations (main loop)
-n_subiters = 1;         % number of iterations (TV denoising)
+phasemasks_rs = zeros(n1,n2,K);
+for k = 1:K
+    phasemasks_rs(:,:,k) = zeropad(imresize(phasemasks(:,:,k),[size(ref,1)*sig,size(ref,2)*sig],'bicubic'),nullpixels);
+end
+
+% pre-calculate diffraction operators
+kx = pi/(pxsize/sig)*(-1:2/n2:1-2/n2);
+ky = pi/(pxsize/sig)*(-1:2/n1:1-2/n1);
+[KX,KY] = meshgrid(kx,ky);
+KK = KX.^2+KY.^2;
+kk = 2*pi/wavlen;   % wave number
+
+% forward model
+Q  = @(x,k) propagate_gpu(x.*exp(-1i*phasemasks_rs(:,:,k)),dist,KK,kk,method);
+QH = @(x,k) propagate_gpu(x,-dist,KK,kk,method).*exp(1i*phasemasks_rs(:,:,k));
+C  = @(x) imgcrop(x,nullpixels);
+CT = @(x) zeropad(x,nullpixels);
+A  = @(x,k) C(Q(x,k));
+AH = @(x,k) QH(CT(x),k);
+
+x_init = ones(n1,n2);
+
+lam = 1e-4;             % regularization parameter
+gam = 2;                % step size
+
+n_iters    = 10;        % number of iterations (main loop)
+n_subiters = 1;         % number of iterations (denoising)
 
 % options
-opts.verbose = true;                                % display status during the iterations
-opts.errfunc = @(z) relative_error_2d(z,x,region);  % user-defined error metrics
-opts.threshold = 1e-3;                              % threshold for step size update (for incremental algorithms)
-opts.eta = 2;                                       % step size decrease ratio (for incremental algorithms)
+opts.verbose = true;
+opts.errfunc = nan;
+opts.threshold = 1e-3;                                  % threshold for step size update (for incremental algorithms)
+opts.eta = 2;                                           % step size decrease ratio (for incremental algorithms)
+
+K = 64;     % total number of images used for reconstruction
 
 % function handles
 myF     = @(x) F(x,y,A,K,sig);                          % fidelity function 
 mydF    = @(x) dF(x,y,A,AH,K,sig);                      % gradient of the fidelity function
 mydFk   = @(x,k) dFk(x,y,A,AH,k,sig);                   % gradient of the fidelity function with respect to the k-th measurement
 myR     = @(x) normTV(x,lam);                           % regularization function
-myproxR = @(x,gamma) proxTV(x,gamma,lam,n_subiters);    % proximal operator for the regularization function
+myproxR = @(x,gam) proxTV(x,gam,lam,n_subiters);        % proximal operator for the regularization function
 
 % run the algorithm
 [x_awf,J_awf,E_awf,runtimes_awf] = AWF(x_init,myF,mydF,myR,myproxR,gam,n_iters,opts);     % AWF (accelerated Wirtinger flow)
@@ -130,9 +127,9 @@ myproxR = @(x,gamma) proxTV(x,gamma,lam,n_subiters);    % proximal operator for 
 % =========================================================================
 
 % crop image to match the size of the sensor
-x_awf_crop = x_awf(nullpixels+1:nullpixels+n,nullpixels+1:nullpixels+n);
-x_wf_crop  = x_wf(nullpixels+1:nullpixels+n,nullpixels+1:nullpixels+n);
-x_wfi_crop = x_wfi(nullpixels+1:nullpixels+n,nullpixels+1:nullpixels+n);
+x_awf_crop = x_awf(nullpixels+1:end-nullpixels,nullpixels+1:end-nullpixels);
+x_wf_crop  = x_wf(nullpixels+1:end-nullpixels, nullpixels+1:end-nullpixels);
+x_wfi_crop = x_wfi(nullpixels+1:end-nullpixels,nullpixels+1:end-nullpixels);
 
 % visualize the reconstructed images
 figure
@@ -152,6 +149,7 @@ semilogy(0:n_iters,J_awf,'linewidth',1.5,'color','r');
 hold on,semilogy(0:n_iters,J_wf,'linewidth',1.5,'color','g');
 hold on,semilogy(0:n_iters,J_wfi,'linewidth',1.5,'color','b');
 legend('AWF','WF','WFi')
+
 %%
 % =========================================================================
 % Auxiliary functions
