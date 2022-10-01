@@ -1,38 +1,42 @@
-function [ wavefront_out ] = propagate( wavefront_in, dist, ...
-    px_size, wavelen, method )
-
+function [ w_o ] = propagate( w_i, dist, pxsize, wavlen, method )
 % -----------------------------------------------------------------
-% This function numerically simulates the propagation of a complex 
-% wavefront with a certain method.
+% This function numerically simulates the free-space propagation of a 
+% complex wavefield.
 % -----------------------------------------------------------------
-%   INPUT   [inputWavefront] original complex wavefront
-%           [dist] propagating distance (mm)
-%           [pxSize] pixel size (mm)
-%           [waveLen] wavelength (mm)
-%           [method] propagation method ('Fresnel' or 'Angular 
-%           Spectrum')
-%   OUTPUT  [outputWavefront] complex wavefront after propagation
-% -----------------------------------------------------------------
+%   INPUT   w_i    : Input complex wavefield
+%           dist   : Propagation distance
+%           pxsize : Pixel size
+%           wavlen : Wavelength
+%           mtehod : Numerical method ('Fresnel' or 'Angular Spectrum')
+%   OUTPUT  w_o    : Output wavefield after propagation
+% -----------------------------------------------------------------                                                                                                                   function [ w_o ] = propagate( w_i, dist, pxsize, wavlen, method )
 
-[N,M] = size(wavefront_in);    % size of the wavefront
+[N,M] = size(w_i);    % size of the wavefront
 
-kx = pi/px_size*(-1:2/M:1-2/M);
-ky = pi/px_size*(-1:2/N:1-2/N);
+kx = pi/pxsize*(-1:2/M:1-2/M);
+ky = pi/pxsize*(-1:2/N:1-2/N);
 [KX,KY] = meshgrid(kx,ky);
 
-k = 2*pi/wavelen;   % wave number
+k = 2*pi/wavlen;   % wave number
 
-inputFT = fftshift(fft2(wavefront_in));
+inputFT = fftshift(fft2(w_i));
 
 if strcmp(method,'Fresnel')
     H = exp(1i*k*dist)*exp(-1i*dist*(KX.^2+KY.^2)/2/k);
 elseif strcmp(method,'Angular Spectrum')
-    H = exp(1i*dist*sqrt(k^2-KX.^2-KY.^2));
+    % remove evanescent orders
+    KX_m = KX;
+    KY_m = KY;
+    ind = (KX.^2+KY.^2 >= k^2);
+    KX_m(ind) = 0;
+    KY_m(ind) = 0;
+    % transfer function
+    H = exp(1i*dist*sqrt(k^2-KX_m.^2-KY_m.^2));
 else
     errordlg('Wrong parameter for [method]: must be <Angular Spectrum> or <Fresnel>','Error');
 end
 
-wavefront_out = ifft2(fftshift(inputFT.*H));
+w_o = ifft2(fftshift(inputFT.*H));
 
 end
 
