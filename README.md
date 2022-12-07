@@ -1,6 +1,28 @@
 # Algorithms for pixel super-resolution phase retrieval
 **Authors:** [Yunhui Gao](https://github.com/Yunhui-Gao) (gyh21@mails.tsinghua.edu.cn) and Liangcai Cao (clc@tsinghua.edu.cn)
 
+## Introduction
+
+**Phase retrieval** and **pixel super-resolution** serve as two essential ingredients for high-fidelity and high-resolution holographic imaging. Here, we combine the two as a unified optimization problem and propose a generalized algorithmic framework for pixel super-resolution phase retrieval.
+
+<p align="center">
+<img src="docs/figures/resolution_1.gif" width="200">   <img src="docs/figures/resolution_2.gif" width="200">
+</p>
+
+Figure 1. Phase reconstruction of a resolution target.
+
+<p align="center">
+<img src="docs/figures/regularization.gif" width="400">
+</p>
+
+Figure 2. Comparison of reconstruction quality under varying measurement numbers.
+
+<p align="center">
+<img src="docs/figures/cell_comparison.gif" width="800">
+</p>
+
+Figure 3. Amplitude reconstruction of a biological sample.
+
 ## Requirements
 Matlab 2019a or newer. Older visions may be sufficient but have not been tested.
 
