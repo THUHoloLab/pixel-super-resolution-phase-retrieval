@@ -1,10 +1,10 @@
 function [ outputWavefront ] = propagate_gpu( inputWavefront, dist, ...
-    KK, kk, method )
+    KX, KY, kk, method )
 
 inputFT = fftshift(fft2(inputWavefront));
 
 if strcmp(method,'Fresnel')
-    H = exp(1i*kk*dist)*exp(-1i*dist*KK/2/kk);
+    H = exp(1i*kk*dist)*exp(-1i*dist*(KX.^2 + KY.^2)/2/kk);
 elseif strcmp(method,'Angular Spectrum')
     % remove evanescent orders
     KX_m = KX;

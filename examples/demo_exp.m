@@ -82,12 +82,11 @@ end
 kx = pi/(pxsize/sig)*(-1:2/n2:1-2/n2);
 ky = pi/(pxsize/sig)*(-1:2/n1:1-2/n1);
 [KX,KY] = meshgrid(kx,ky);
-KK = KX.^2+KY.^2;
 kk = 2*pi/wavlen;   % wave number
 
 % forward model
-Q  = @(x,k) propagate_gpu(x.*exp(-1i*phasemasks_rs(:,:,k)),dist,KK,kk,method);
-QH = @(x,k) propagate_gpu(x,-dist,KK,kk,method).*exp(1i*phasemasks_rs(:,:,k));
+Q  = @(x,k) propagate_gpu(x.*exp(-1i*phasemasks_rs(:,:,k)),dist,KX,KY,kk,method);
+QH = @(x,k) propagate_gpu(x,-dist,KX,KY,kk,method).*exp(1i*phasemasks_rs(:,:,k));
 C  = @(x) imgcrop(x,nullpixels);
 CT = @(x) zeropad(x,nullpixels);
 A  = @(x,k) C(Q(x,k));
