@@ -27,7 +27,7 @@
 Matlab 2019a or newer. Older visions may be sufficient but have not been tested.
 
 ## Quick Start
-Run [`demo_sim.m`](https://github.com/THUHoloLab/pixel-super-resolution-phase-retrieval/blob/master/examples/demo_sim.m) with default parameters.
+Run [`demo_sim.m`](https://github.com/THUHoloLab/pixel-super-resolution-phase-retrieval/blob/master/main/demo_sim.m) with default parameters.
 
 ## Theories and References
 For algorithm derivation and implementation details, please refer to our papers:
