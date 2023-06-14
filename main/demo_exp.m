@@ -26,7 +26,7 @@ close all;
 addpath(genpath('./utils'))
 addpath(genpath('../src'))
 
-group_num = 2;      % group number
+group_num = 1;      % group number
 load(['../data/experiment/E',num2str(group_num),'.mat'])
 
 %% estimate maximum resolution (optional)
@@ -56,9 +56,6 @@ for k = 1:K
 end
 y = images_crop;
 phasemasks = phasemasks_crop;
-
-%%
-save(['cache_E',num2str(group_num),'.mat'])
 
 %%
 % =========================================================================

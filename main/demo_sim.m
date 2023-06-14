@@ -152,6 +152,7 @@ semilogy(0:n_iters,J_awf,'linewidth',1.5,'color','r');
 hold on,semilogy(0:n_iters,J_wf,'linewidth',1.5,'color','g');
 hold on,semilogy(0:n_iters,J_wfi,'linewidth',1.5,'color','b');
 legend('AWF','WF','WFi')
+
 %%
 % =========================================================================
 % Auxiliary functions
