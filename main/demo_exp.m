@@ -18,7 +18,10 @@
 %       Yunhui Gao (gyh21@mails.tsinghua.edu.cn)
 % =========================================================================
 
-%% load experimental data
+%%
+% =========================================================================
+% Data generation
+% =========================================================================
 clear;clc;
 close all;
 
@@ -26,6 +29,7 @@ close all;
 addpath(genpath('./utils'))
 addpath(genpath('../src'))
 
+% load experimental data
 group_num = 1;      % group number
 load(['../data/experiment/E',num2str(group_num),'.mat'])
 
@@ -82,28 +86,26 @@ ky = pi/(pxsize/sig)*(-1:2/n1:1-2/n1);
 kk = 2*pi/wavlen;   % wave number
 
 % forward model
-Q  = @(x,k) propagate_gpu(x.*exp(-1i*phasemasks_rs(:,:,k)),dist,KX,KY,kk,method);
-QH = @(x,k) propagate_gpu(x,-dist,KX,KY,kk,method).*exp(1i*phasemasks_rs(:,:,k));
-C  = @(x) imgcrop(x,nullpixels);
-CT = @(x) zeropad(x,nullpixels);
-A  = @(x,k) C(Q(x,k));
-AH = @(x,k) QH(CT(x),k);
+Q  = @(x,k) propagate_gpu(x.*exp(-1i*phasemasks_rs(:,:,k)),dist,KX,KY,kk,method);   % mask modulation & forward propagation
+QH = @(x,k) propagate_gpu(x,-dist,KX,KY,kk,method).*exp(1i*phasemasks_rs(:,:,k));   % Hermitian of Q: backward propagation & conjugate mask
+C  = @(x) imgcrop(x,nullpixels);    % image cropping operation (to model the finite size of the sensor area)
+CT = @(x) zeropad(x,nullpixels);    % transpose of C: zero-padding operation
+A  = @(x,k) C(Q(x,k));              % overall sampling operation
+AH = @(x,k) QH(CT(x),k);            % Hermitian of A
 
-x_init = ones(n1,n2);
-
+% algorithm settings
+x_init = ones(n1,n2);   % initial guess
 lam = 1e-4;             % regularization parameter
 gam = 2;                % step size
-
 n_iters    = 10;        % number of iterations (main loop)
 n_subiters = 1;         % number of iterations (denoising)
+K = 64;                 % total number of images used for reconstruction
 
 % options
 opts.verbose = true;
 opts.errfunc = nan;
 opts.threshold = 1e-3;                                  % threshold for step size update (for incremental algorithms)
 opts.eta = 2;                                           % step size decrease ratio (for incremental algorithms)
-
-K = 64;     % total number of images used for reconstruction
 
 % function handles
 myF     = @(x) F(x,y,A,K,sig);                          % fidelity function 

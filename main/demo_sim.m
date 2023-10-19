@@ -62,12 +62,12 @@ for k = 1:K
 end
 
 % forward model
-Q  = @(x,k) propagate(x.*mask(:,:,k), params.dist,params.pxsize,params.wavlen,params.method);
-QH = @(x,k) propagate(x,-params.dist,params.pxsize,params.wavlen,params.method).*conj(mask(:,:,k));
-C  = @(x) imgcrop(x,nullpixels);
-CT = @(x) zeropad(x,nullpixels);
-A  = @(x,k) C(Q(x,k));
-AH = @(x,k) QH(CT(x),k);
+Q  = @(x,k) propagate(x.*mask(:,:,k), params.dist,params.pxsize,params.wavlen,params.method);           % mask modulation & forward propagation
+QH = @(x,k) propagate(x,-params.dist,params.pxsize,params.wavlen,params.method).*conj(mask(:,:,k));     % Hermitian of Q: backward propagation & conjugate mask
+C  = @(x) imgcrop(x,nullpixels);        % image cropping operation (to model the finite size of the sensor area)
+CT = @(x) zeropad(x,nullpixels);        % transpose of C: zero-padding operation
+A  = @(x,k) C(Q(x,k));                  % overall sampling operation
+AH = @(x,k) QH(CT(x),k);                % Hermitian of A
 
 % generate data
 rng(0)              % random seed, for reproducibility
@@ -80,11 +80,13 @@ end
 
 % display measurement
 figure
-subplot(1,2,1),imshow(angle(x),[]);colorbar;
-title('Phase of the object','interpreter','latex','fontsize',12)
-subplot(1,2,2),imshow(y(:,:,1),[]);colorbar;
-title('Intensity measurement','interpreter','latex','fontsize',12)
 set(gcf,'unit','normalized','position',[0.2,0.3,0.6,0.4])
+subplot(1,3,1),imshow(abs(x),[]);colorbar;
+title('Amplitude of the object','interpreter','latex','fontsize',12)
+subplot(1,3,2),imshow(angle(x),[]);colorbar;
+title('Phase of the object','interpreter','latex','fontsize',12)
+subplot(1,3,2),imshow(y(:,:,1),[]);colorbar;
+title('Intensity measurement','interpreter','latex','fontsize',12)
 
 %%
 % =========================================================================
@@ -98,13 +100,11 @@ region.y1 = nullpixels+1;
 region.y2 = nullpixels+n;
 
 % algorithm settings
-x_init = zeros(size(x));   % initial guess
-x_init(nullpixels+1:nullpixels+n,nullpixels+1:nullpixels+n) = 1;
-
-lam = 1e-3;             % regularization parameter
-gam = 2;                % step size (see the paper for details)
-n_iters = 50;           % number of iterations (main loop)
-n_subiters = 1;         % number of iterations (TV denoising)
+x_init = ones(size(x));     % initial guess
+lam = 1e-3;                 % regularization parameter
+gam = 2;                    % step size (see the paper for details)
+n_iters = 50;               % number of iterations (main loop)
+n_subiters = 1;             % number of iterations (TV denoising)
 
 % options
 opts.verbose = true;                                % display status during the iterations
