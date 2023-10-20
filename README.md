@@ -32,6 +32,9 @@ Matlab 2019a or newer. Older visions may be sufficient but have not been tested.
 - **PSR phase retrieval using simulated data.** Run [`demo_sim.m`](https://github.com/THUHoloLab/pixel-super-resolution-phase-retrieval/blob/master/main/demo_sim.m) with default parameters.
 - **PSR phase retrieval using experimental data.** Run [`demo_exp.m`](https://github.com/THUHoloLab/pixel-super-resolution-phase-retrieval/blob/master/main/demo_exp.m) with default parameters. Experimental data may be obtained from the authors upon reasonable request.
 
+## Accelerated Implementations
+The basic demo codes provide intuitive and proof-of-concept implementations for beginners, but are far from efficient. To facilitate faster reconstruction, we provide an optimized version based on CPU or GPU, which can be found at [`demo_sim_fast.m`](https://github.com/THUHoloLab/pixel-super-resolution-phase-retrieval/blob/master/main/demo_sim_fast.m) and [`demo_exp_fast.m`](https://github.com/THUHoloLab/pixel-super-resolution-phase-retrieval/blob/master/main/demo_exp_fast.m) for simulated and experimental data, respectively. To enable GPU usage, simply set `gpu = true;` in the code.
+
 ## Theories and References
 For algorithm derivation and implementation details, please refer to our papers:
 
