@@ -30,7 +30,7 @@ Matlab 2019a or newer. Older visions may be sufficient but have not been tested.
 
 ## Quick Start
 - **PSR phase retrieval using simulated data.** Run [`demo_sim.m`](https://github.com/THUHoloLab/pixel-super-resolution-phase-retrieval/blob/master/main/demo_sim.m) with default parameters.
-- **PSR phase retrieval using experimental data.** Run [`demo_exp.m`](https://github.com/THUHoloLab/CCTV-phase-retrieval/blob/master/main/demo_exp.m) with default parameters. Experimental data may be obtained from the authors upon reasonable request.
+- **PSR phase retrieval using experimental data.** Run [`demo_exp.m`](https://github.com/THUHoloLab/pixel-super-resolution-phase-retrieval/blob/master/main/demo_exp.m) with default parameters. Experimental data may be obtained from the authors upon reasonable request.
 
 ## Theories and References
 For algorithm derivation and implementation details, please refer to our papers:

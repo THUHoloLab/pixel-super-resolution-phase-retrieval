@@ -1,4 +1,13 @@
 function re = relative_error_2d(x_es,x_gt,region)
+% =========================================================================
+% Calculate the relative error (RE) of an estimated wavefield w.r.t. the
+% ground truth.
+% -------------------------------------------------------------------------
+% Input:    - x_est  : Estimated 2D wavefield.
+%           - x_gt   : Ground truth.
+%           - region : Rectangular region for RE calculation.
+% Output:   - re     : Relative error.
+% =========================================================================
 
 x_es = x_es(region.x1:region.x2,region.y1:region.y2);
 x_gt = x_gt(region.x1:region.x2,region.y1:region.y2);

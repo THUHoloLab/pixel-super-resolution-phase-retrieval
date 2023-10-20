@@ -53,6 +53,10 @@ kernelsize = params.dist*params.wavlen/params.pxsize/2; % diffraction kernel siz
 nullpixels = ceil(kernelsize / params.pxsize);          % number of padding pixels
 x = zeropad(x,nullpixels);                              % zero-padded sample
 
+% pre-calculate the transfer functions for diffraction modeling
+H_f = fftshift(transfunc(size(x,2),size(x,1), params.dist,params.pxsize,params.wavlen,params.method)); % forward propagation
+H_b = fftshift(transfunc(size(x,2),size(x,1),-params.dist,params.pxsize,params.wavlen,params.method)); % backward propagation
+
 % generate modulation patterns
 mask = NaN([size(x),K]);
 ptsize = sig*1;     % feature size of the modulation patterns
@@ -64,8 +68,8 @@ end
 % forward model
 M  = @(x,k) x.*mask(:,:,k);             % mask modulation
 MH = @(x,k) x.*conj(mask(:,:,k));       % Hermitian of M: conjugate mask modulation
-H  = @(x,k) propagate(x, params.dist,params.pxsize,params.wavlen,params.method);     % forward propagation
-HH = @(x,k) propagate(x,-params.dist,params.pxsize,params.wavlen,params.method);     % Hermitian of H: backward propagation
+H  = @(x,k) ifft2(fft2(x).*H_f);        % forward propagation
+HH = @(x,k) ifft2(fft2(x).*H_b);        % Hermitian of H: backward propagation
 C  = @(x) imgcrop(x,nullpixels);        % image cropping operation (to model the finite size of the sensor area)
 CT = @(x) zeropad(x,nullpixels);        % transpose of C: zero-padding operation
 A  = @(x,k) C(H(M(x,k)));               % overall sampling operation
@@ -77,7 +81,7 @@ noisevar = 0.01;    % noise level
 y = NaN(m,m,K);
 for k = 1:K
     u = A(x,k);
-    y(:,:,k) = max(S(abs(u).^2,sig).*(1+noisevar*randn(m,m)),0);    % Gaussian noise
+    y(:,:,k) = max(Sf(abs(u).^2,sig).*(1+noisevar*randn(m,m)),0);    % Gaussian noise
 end
 
 % display measurement
@@ -95,38 +99,80 @@ title('Intensity measurement','interpreter','latex','fontsize',12)
 % Pixel super-resolution phase retrieval algorithms
 % =========================================================================
 
-% define a rectangular region for computing the errors
-region.x1 = nullpixels+1;
-region.x2 = nullpixels+n;
-region.y1 = nullpixels+1;
-region.y2 = nullpixels+n;
+gpu = true;
 
 % algorithm settings
-x_init = ones(size(x));     % initial guess
+x_est = ones(size(x));      % initial guess
 lam = 1e-3;                 % regularization parameter
 gam = 2;                    % step size (see the paper for details)
 n_iters = 50;               % number of iterations (main loop)
 n_subiters = 1;             % number of iterations (TV denoising)
 
-% options
-opts.verbose = true;                                % display status during the iterations
-opts.errfunc = @(z) relative_error_2d(z,x,region);  % user-defined error metrics
-opts.threshold = 1e-3;                              % threshold for step size update (for incremental algorithms)
-opts.eta = 2;                                       % step size decrease ratio (for incremental algorithms)
+% auxilary variables
+z_est = x_est;
+g_est = zeros(size(x_est));
+v_est = zeros(size(x_est,1),size(x_est,2),2);
+w_est = zeros(size(x_est,1),size(x_est,2),2);
 
-% function handles
-myF     = @(x) F(x,y,A,K,sig);                          % fidelity function 
-mydF    = @(x) dF(x,y,A,AH,K,sig);                      % gradient of the fidelity function
-mydFk   = @(x,k) dFk(x,y,A,AH,k,sig);                   % gradient of the fidelity function with respect to the k-th measurement
-myR     = @(x) normTV(x,lam);                           % regularization function
-myproxR = @(x,gamma) proxTV(x,gamma,lam,n_subiters);    % proximal operator for the regularization function
+% initialize GPU
+if gpu
+    device  = gpuDevice();
+    x_est   = gpuArray(x_est);
+    y       = gpuArray(y);
+    mask    = gpuArray(mask);
+    H_f     = gpuArray(H_f);
+    H_b     = gpuArray(H_b);
+    z_est   = gpuArray(z_est);
+    g_est   = gpuArray(g_est);
+    v_est   = gpuArray(v_est);
+    w_est   = gpuArray(w_est);
+end
 
-% run the AWF algorithm
-[x_awf,J_awf,E_awf,runtimes_awf] = AWF(x_init,myF,mydF,myR,myproxR,gam,n_iters,opts);     % AWF (accelerated Wirtinger flow)
+% main loop
+timer = tic;
+for iter = 1:n_iters
 
-% compare AWF with other algorithms
-[x_wf, J_wf, E_wf, runtimes_wf ] = WF(x_init,myF,mydF,myR,myproxR,gam,n_iters,opts);      % WF (Wirtinger flow)
-[x_wfi,J_wfi,E_wfi,runtimes_wfi] = WFi(x_init,myF,mydFk,myR,myproxR,gam,n_iters,K,opts);  % WFi (Wirtinger flow with incremental updates)
+    % print status
+    fprintf('iter: %4d / %4d \n', iter, n_iters);
+    
+    % gradient update
+    g_est(:) = 0;
+    for k = 1:K
+        u = A(z_est,k);
+        a = sqrt(Sf(abs(u).^2,sig));
+        u = 1/2 * AH(u.*STf((1./a).*(a - sqrt(y(:,:,k))), sig), k);
+        g_est = g_est + 1/K*u;
+    end
+    u = z_est - gam * g_est;
+
+    % proximal update
+    v_est(:) = 0; w_est(:) = 0;
+    for subiter = 1:n_subiters
+        w_next = v_est + 1/8/gam*Df(u-gam*DTf(v_est));
+        w_next = min(abs(w_next),lam).*exp(1i*angle(w_next));
+        v_est = w_next + subiter/(subiter+3)*(w_next-w_est);
+        w_est = w_next;
+    end
+    x_next = u - gam*DTf(w_est);
+    
+    % Nesterov extrapolation
+    z_est = x_next + (iter/(iter+3))*(x_next - x_est);
+    x_est = x_next;
+end
+
+% wait for GPU
+if gpu; wait(device); end
+toc(timer)
+
+% gather data from GPU
+if gpu
+    x_est   = gather(x_est);
+    y       = gather(y);
+    H_f     = gather(H_f);
+    H_b     = gather(H_b);
+    mask    = gather(mask);
+    reset(device);
+end
 
 %%
 % =========================================================================
@@ -134,28 +180,15 @@ myproxR = @(x,gamma) proxTV(x,gamma,lam,n_subiters);    % proximal operator for 
 % =========================================================================
 
 % crop image to match the size of the sensor
-x_awf_crop = x_awf(nullpixels+1:nullpixels+n,nullpixels+1:nullpixels+n);
-x_wf_crop  = x_wf(nullpixels+1:nullpixels+n,nullpixels+1:nullpixels+n);
-x_wfi_crop = x_wfi(nullpixels+1:nullpixels+n,nullpixels+1:nullpixels+n);
+x_est_crop = C(x_est);
 
 % visualize the reconstructed images
 figure
-subplot(2,3,1),imshow(abs(x_awf_crop),[]);colorbar
-title(['Accelerated WF (Obj. Val. = ', num2str(J_awf(end),'%4.3f'),')'],'interpreter','latex','fontsize',14)
-subplot(2,3,2),imshow(abs(x_wf_crop), []);colorbar
-title(['WF (Obj. Val. = ', num2str(J_wf(end),'%4.3f'),')'],'interpreter','latex','fontsize',14)
-subplot(2,3,3),imshow(abs(x_wfi_crop),[]);colorbar
-title(['Incremental WF (Obj. Val. = ', num2str(J_wfi(end),'%4.3f'),')'],'interpreter','latex','fontsize',14)
-subplot(2,3,4),imshow(angle(x_awf_crop),[]);colorbar
-subplot(2,3,5),imshow(angle(x_wf_crop), []);colorbar
-subplot(2,3,6),imshow(angle(x_wfi_crop),[]);colorbar
-set(gcf,'unit','normalized','position',[0.15,0.2,0.7,0.6])
-
-figure
-semilogy(0:n_iters,J_awf,'linewidth',1.5,'color','r');
-hold on,semilogy(0:n_iters,J_wf,'linewidth',1.5,'color','g');
-hold on,semilogy(0:n_iters,J_wfi,'linewidth',1.5,'color','b');
-legend('AWF','WF','WFi')
+set(gcf,'unit','normalized','position',[0.2,0.3,0.6,0.4])
+subplot(1,2,1),imshow(abs(x_est_crop),[]);colorbar
+title('Retrieved amplitude','interpreter','latex','fontsize',14)
+subplot(1,2,2),imshow(angle(x_est_crop),[]);colorbar
+title('Retrieved phase','interpreter','latex','fontsize',14)
 
 %%
 % =========================================================================
@@ -235,7 +268,7 @@ function g = dFk(x,y,A,AH,k,sig)
 % =========================================================================
 u = A(x,k);
 a = sqrt(S(abs(u).^2,sig));
-g = 1/2 * AH(u.*ST((1./a).*(a - sqrt(y(:,:,k))), sig), k);
+g = 1/2 * AH(u.*STf((1./a).*(a - sqrt(y(:,:,k))), sig), k);
 
 end
 
@@ -262,5 +295,103 @@ function u = zeropad(x,padsize)
 % Output:   - u        : Zero-padded image.
 % =========================================================================
 u = padarray(x,[padsize,padsize],0);
+
+end
+
+
+function H = transfunc(nx, ny, dist, pxsize, wavlen, method)
+% =========================================================================
+% Calculate the transfer function of the free-space diffraction.
+% -------------------------------------------------------------------------
+% Input:    - nx, ny   : The image dimensions.
+%           - dist     : Propagation distance.
+%           - pxsize   : Pixel (sampling) size.
+%           - wavlen   : Wavelength of the light.
+%           - method   : Numerical method ('Fresnel' or 'Angular Spectrum').
+% Output:   - H        : Transfer function.
+% =========================================================================
+
+% sampling in the spatial frequency domain
+kx = pi/pxsize*(-1:2/nx:1-2/nx);
+ky = pi/pxsize*(-1:2/ny:1-2/ny);
+[KX,KY] = meshgrid(kx,ky);
+
+k = 2*pi/wavlen;    % wave number
+
+ind = (KX.^2 + KY.^2 >= k^2);  % remove evanescent orders
+KX(ind) = 0; KY(ind) = 0;
+
+if strcmp(method,'Fresnel')
+    H = exp(1i*k*dist)*exp(-1i*dist*(KX.^2+KY.^2)/2/k);
+elseif strcmp(method,'Angular Spectrum')
+    H = exp(1i*dist*sqrt(k^2-KX.^2-KY.^2));
+else
+    errordlg('Wrong parameter for [method]: must be <Angular Spectrum> or <Fresnel>','Error');
+end
+end
+
+
+function w = Df(x)
+% =========================================================================
+% Calculate the 2D gradient (finite difference) of an input image.
+% -------------------------------------------------------------------------
+% Input:    - x  : The input 2D image.
+% Output:   - w  : The gradient (3D array).
+% =========================================================================
+w = cat(3,x(1:end,:) - x([2:end,end],:),x(:,1:end) - x(:,[2:end,end]));
+end
+
+
+function u = DTf(w)
+% =========================================================================
+% Calculate the transpose of the gradient operator.
+% -------------------------------------------------------------------------
+% Input:    - w  : 3D array.
+% Output:   - x  : 2D array.
+% =========================================================================
+u1 = w(:,:,1) - w([end,1:end-1],:,1);
+u1(1,:) = w(1,:,1);
+u1(end,:) = -w(end-1,:,1);
+
+u2 = w(:,:,2) - w(:,[end,1:end-1],2);
+u2(:,1) = w(:,1,2);
+u2(:,end) = -w(:,end-1,2);
+
+u = u1 + u2;
+end
+
+
+function u = Sf(x,sig)
+% =========================================================================
+% Calculate the down-sampling (pixel binning) operator.
+% -------------------------------------------------------------------------
+% Input:    - x   : High-resolution 2D image.
+%           - sig : Down-sampling ratio (positive integer).
+% Output:   - u   : Down-sampled 2D image.
+% =========================================================================
+
+u = x;
+u(:) = 0;
+for r = 0:sig-1
+    for c = 0:sig-1
+        u(1:sig:end,1:sig:end) = u(1:sig:end,1:sig:end) + x(1+r:sig:end,1+c:sig:end);
+    end
+end
+u = u(1:sig:end,1:sig:end);
+
+end
+
+
+function u = STf(x,sig)
+% =========================================================================
+% Calculate the transpose of the down-sampling (pixel binning) operator S,
+% which corresponds to the nearest interpolation operator.
+% -------------------------------------------------------------------------
+% Input:    - x   : Low-resolution 2D image.
+%           - sig : Down-sampling ratio (positive integer).
+% Output:   - u   : Nearest-interpolated 2D image.
+% =========================================================================
+
+u = imresize(x,size(x)*sig,"nearest");
 
 end
